@@ -3,3 +3,6 @@ AI Driven Digital Transformation
 
 ## Technologies
 - Artificial Intelligence (AI)
+
+## Tools
+- To be determined
