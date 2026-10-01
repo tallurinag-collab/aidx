@@ -9,4 +9,14 @@
   <version>1.0.0</version>
   <name>aidx</name>
   <description>AI Driven Digital Transformation</description>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>com.microsoft.azure</groupId>
+        <artifactId>azure-webapp-maven-plugin</artifactId>
+        <version>2.14.1</version>
+      </plugin>
+    </plugins>
+  </build>
 </project>
