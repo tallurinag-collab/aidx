@@ -1,0 +1,25 @@
+{
+  "company": {
+    "name": "Acme Manufacturing",
+    "industry": "Manufacturing",
+    "employeeCount": 250
+  },
+  "transformationRequest": {
+    "challenge": "Reduce production delays and improve equipment uptime.",
+    "goals": [
+      "Identify equipment failure risks earlier",
+      "Improve on-time delivery",
+      "Give operations teams a shared view of performance"
+    ],
+    "systems": [
+      "ERP",
+      "Machine telemetry",
+      "Maintenance management"
+    ],
+    "constraints": [
+      "Keep existing ERP",
+      "Meet internal data security requirements"
+    ],
+    "targetDate": "2027-03-31"
+  }
+}
