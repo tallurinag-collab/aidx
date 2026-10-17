@@ -432,13 +432,14 @@ function TripsView({ trips, onOpen, onCreate, onDuplicate, onDelete }: { trips: 
   );
 }
 
-function TripDetail({ trip, onBack, onAddPlace, onRemoveItem, onDuplicate, onEditVisibility }: {
+function TripDetail({ trip, onBack, onAddPlace, onRemoveItem, onDuplicate, onEditVisibility, onPlaceOrder }: {
   trip: Trip;
   onBack: () => void;
   onAddPlace: (place: Place) => void;
   onRemoveItem: (itemId: string) => void;
   onDuplicate: () => void;
   onEditVisibility: (visibility: Visibility) => void;
+  onPlaceOrder: () => void;
 }) {
   const days = daysForTrip(trip);
   const unscheduled = trip.items.filter((item) => !item.date || !days.includes(item.date));
@@ -451,7 +452,7 @@ function TripDetail({ trip, onBack, onAddPlace, onRemoveItem, onDuplicate, onEdi
       <button className="back-link" type="button" onClick={onBack}>← <span>All trips</span></button>
       <section className="trip-detail-hero" style={{ backgroundImage: `linear-gradient(90deg, rgba(20,38,30,.86), rgba(20,38,30,.18)), url("${trip.image}")` }}>
         <div className="trip-detail-copy"><p className="overline-light">YOUR TRAVEL NOTEBOOK</p><h1>{trip.destination.split(',')[0]}<br /><em>{trip.title}</em></h1><div className="spotlight-meta"><span>▦ {dateRange(trip.startDate, trip.endDate)}</span><span>⌖ {trip.items.length} stops saved</span></div></div>
-        <div className="trip-detail-controls"><label className="visibility-control"><span>◉</span><select value={trip.visibility} onChange={(event) => onEditVisibility(event.target.value as Visibility)} aria-label="Trip visibility"><option>Private</option><option>Followers</option><option>Public</option></select></label><button className="icon-button trip-detail-more" type="button" onClick={onDuplicate} aria-label="Duplicate trip">⧉</button></div>
+        <div className="trip-detail-controls"><label className="visibility-control"><span>◉</span><select value={trip.visibility} onChange={(event) => onEditVisibility(event.target.value as Visibility)} aria-label="Trip visibility"><option>Private</option><option>Followers</option><option>Public</option></select></label><button className="button button-light trip-order-button" type="button" onClick={onPlaceOrder}>Place order <span>↗</span></button><button className="icon-button trip-detail-more" type="button" onClick={onDuplicate} aria-label="Duplicate trip">⧉</button></div>
       </section>
       <div className="trip-detail-tabs" role="tablist" aria-label="Trip sections"><button className={activePanel === 'Itinerary' ? 'selected' : ''} type="button" role="tab" aria-selected={activePanel === 'Itinerary'} onClick={() => setActivePanel('Itinerary')}>Itinerary <span>{trip.items.length}</span></button><button className={activePanel === 'Explore places' ? 'selected' : ''} type="button" role="tab" aria-selected={activePanel === 'Explore places'} onClick={() => setActivePanel('Explore places')}>Find places <span>＋</span></button></div>
       {activePanel === 'Itinerary' ? (
@@ -502,6 +503,57 @@ function Modal({ title, eyebrow, onClose, children, className = '' }: { title: s
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className={`modal-card ${className}`} role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-head"><div><p className="eyebrow">{eyebrow}</p><h2 id="modal-title">{title}</h2></div><button className="icon-button modal-close" type="button" onClick={onClose} aria-label="Close dialog">×</button></div>{children}</section></div>;
+}
+
+function PlaceOrderModal({ trip, onClose, onPlaced }: { trip: Trip; onClose: () => void; onPlaced: (orderId: string) => void }) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [orderId, setOrderId] = useState('');
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      travelerName: String(form.get('travelerName') || '').trim(),
+      email: String(form.get('email') || '').trim(),
+      tripTitle: trip.title,
+      destination: trip.destination,
+      startDate: String(form.get('startDate') || ''),
+      endDate: String(form.get('endDate') || ''),
+      travelerCount: Number(form.get('travelerCount')),
+    };
+
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.detail || result.message || 'We could not place your order. Please check the details and try again.');
+      setOrderId(result.id);
+      onPlaced(result.id);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'The app server could not be reached. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return <Modal title={orderId ? 'Your request is on its way.' : 'A few details, then you’re set.'} eyebrow={orderId ? 'ORDER RECEIVED' : 'TRIP ORDER'} onClose={onClose} className="create-modal">
+    {orderId ? <div className="order-confirmation"><span className="order-confirmation-mark">✓</span><p>We’ve received your travel order request for <strong>{trip.destination}</strong>.</p><div className="order-reference"><small>ORDER REFERENCE</small><strong>{orderId}</strong></div><p className="order-note">This demo records the request in the app server. It does not charge you or confirm hotel, transport, or activity availability.</p><button className="button button-dark" type="button" onClick={onClose}>Done</button></div> : <form className="modal-form" onSubmit={submit}>
+      <div className="order-trip-summary"><span className="eyebrow">YOUR TRIP</span><strong>{trip.title}</strong><small>{trip.destination}</small></div>
+      <label>Traveler name<input name="travelerName" autoComplete="name" maxLength={120} required placeholder="Your full name" /></label>
+      <label>Email address<input name="email" type="email" autoComplete="email" required placeholder="you@example.com" /></label>
+      <div className="form-row"><label>Departure<input name="startDate" type="date" required defaultValue={trip.startDate} /></label><label>Return<input name="endDate" type="date" required defaultValue={trip.endDate} /></label></div>
+      <label>Travelers<select name="travelerCount" defaultValue="1">{Array.from({ length: 12 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count} {count === 1 ? 'traveler' : 'travelers'}</option>)}</select></label>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <p className="order-note">This sends a request to the app server. No payment is collected, and provider availability is not checked.</p>
+      <div className="modal-form-foot"><p>You can close this window without submitting.</p><button className="button button-dark" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Sending…' : 'Place order'} <span>↗</span></button></div>
+    </form>}
+  </Modal>;
 }
 
 function CreateTripModal({ onClose, onCreate }: { onClose: () => void; onCreate: (trip: Trip) => void }) {
@@ -618,7 +670,7 @@ export default function App() {
   const [likedIds, setLikedIds] = useStoredState<string[]>(storageKeys.liked, ['story-1']);
   const [following, setFollowing] = useStoredState<string[]>(storageKeys.following, ['@mayawanders', '@jonahoutside']);
   const [query, setQuery] = useState('');
-  const [modal, setModal] = useState<'trip' | 'story' | null>(null);
+  const [modal, setModal] = useState<'trip' | 'story' | 'order' | null>(null);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [exploreDestination, setExploreDestination] = useState('');
@@ -704,7 +756,7 @@ export default function App() {
       <div className="app-main">
         <Topbar query={query} setQuery={setQuery} onStory={() => setModal('story')} />
         <main className="main-content" id="main-content">
-          {currentTrip && activeView === 'trips' ? <TripDetail trip={currentTrip} onBack={() => setSelectedTripId(null)} onAddPlace={(place) => addPlaceToTrip(place, currentTrip.id)} onRemoveItem={(itemId) => setTrips((previous) => previous.map((trip) => trip.id === currentTrip.id ? { ...trip, items: trip.items.filter((item) => item.id !== itemId) } : trip))} onDuplicate={() => duplicateTrip(currentTrip)} onEditVisibility={(visibility) => setTrips((previous) => previous.map((trip) => trip.id === currentTrip.id ? { ...trip, visibility } : trip))} /> :
+          {currentTrip && activeView === 'trips' ? <TripDetail trip={currentTrip} onBack={() => setSelectedTripId(null)} onAddPlace={(place) => addPlaceToTrip(place, currentTrip.id)} onRemoveItem={(itemId) => setTrips((previous) => previous.map((trip) => trip.id === currentTrip.id ? { ...trip, items: trip.items.filter((item) => item.id !== itemId) } : trip))} onDuplicate={() => duplicateTrip(currentTrip)} onEditVisibility={(visibility) => setTrips((previous) => previous.map((trip) => trip.id === currentTrip.id ? { ...trip, visibility } : trip))} onPlaceOrder={() => setModal('order')} /> :
             activeView === 'home' ? <HomeView stories={visibleStories} trips={trips} likedIds={likedIds} savedIds={savedIds} following={following} onOpenTrip={openTrip} onLike={toggleLike} onSave={toggleSaved} onFollow={toggleFollow} onReport={reportStory} onAddPlace={addPlaceToTrip} onExplore={navigateExplore} onCreateTrip={() => setModal('trip')} /> :
             activeView === 'explore' ? <ExploreView query={query} initialDestination={exploreDestination} savedIds={savedIds} onSave={toggleSaved} onAdd={addPlaceToTrip} onOpenPlace={setSelectedPlace} onDestinationChange={setExploreDestination} /> :
             activeView === 'trips' ? <TripsView trips={trips} onOpen={openTrip} onCreate={() => setModal('trip')} onDuplicate={duplicateTrip} onDelete={deleteTrip} /> :
@@ -715,6 +767,7 @@ export default function App() {
       </div>
       {modal === 'trip' && <CreateTripModal onClose={() => setModal(null)} onCreate={createTrip} />}
       {modal === 'story' && <CreateStoryModal onClose={() => setModal(null)} onPublish={createStory} />}
+      {modal === 'order' && currentTrip && <PlaceOrderModal trip={currentTrip} onClose={() => setModal(null)} onPlaced={(orderId) => announce(`Travel order received · ${orderId.slice(0, 8)}.`)} />}
       {selectedPlace && <PlaceDetailsModal place={selectedPlace} onClose={() => setSelectedPlace(null)} onAdd={() => { addPlaceToTrip(selectedPlace); setSelectedPlace(null); }} isSaved={savedIds.includes(`place:${selectedPlace.id}`)} onSave={() => toggleSaved(`place:${selectedPlace.id}`)} />}
       <Toast message={toast} onClose={() => setToast('')} />
       <span className="sr-only" aria-live="polite">{viewTitle}</span>
